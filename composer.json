@@ -1,0 +1,19 @@
+{
+    "name": "julie/tarot",
+    "require": {
+        "brick/math": "^0.9.3",
+        "julien-boudry/condorcet": "dev-Experimental/BigInt"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "CondorcetPHP\\Tarot\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Julien Boudry",
+            "email": "julien.boudry@gmail.com"
+        }
+    ]
+}

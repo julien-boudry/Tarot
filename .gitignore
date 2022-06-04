@@ -1,0 +1,10 @@
+*.sqlite
+*.clover
+
+# composer
+/vendor/
+/composer.lock
+
+# IDE
+*.idea
+*.code-workspace
