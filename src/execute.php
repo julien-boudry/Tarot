@@ -1,266 +1,269 @@
 <?php
 /*
-    Condorcet PHP - Election manager and results calculator.
-    Designed for the Condorcet method. Integrating a large number of algorithms extending Condorcet. Expandable for all types of voting systems.
-
-    By Julien Boudry and contributors - MIT LICENSE (Please read LICENSE.txt)
+    By Julien Boudry - MIT LICENSE (Please read LICENSE.txt)
     https://github.com/julien-boudry/Condorcet
 */
 declare(strict_types=1);
 
-namespace CondorcetPHP\Tarot;
+namespace JulienBoudry\Tarot;
 
+use Brick\Math\BigDecimal;
 use Brick\Math\BigInteger;
-use Brick\Math\Exception\IntegerOverflowException;
-use CondorcetPHP\Condorcet\Throwable\Internal\IntegerOverflowException as CondorcetIntegerOverflowException;
-use CondorcetPHP\Condorcet\Dev\CondorcetDocumentationGenerator\CondorcetDocAttributes\InternalModulesAPI;
-use CondorcetPHP\Condorcet\Dev\CondorcetDocumentationGenerator\CondorcetDocAttributes\PublicAPI;
-use CondorcetPHP\Condorcet\Throwable\Internal\CondorcetInternalException;
-use CondorcetPHP\Condorcet\Timer\Chrono;
-use CondorcetPHP\Condorcet\Timer\Manager;
-use Error;
-use SplFixedArray;
+use Brick\Math\RoundingMode;
+use CondorcetPHP\Condorcet\Throwable\Internal\{IntegerOverflowException as CondorcetIntegerOverflowException, CondorcetInternalException};
+use CondorcetPHP\Condorcet\Timer\{Chrono, Manager};
 
 require_once 'vendor/autoload.php';
 
-// Chrone
+// Config
+const MAIN_LENGTH = 18; # Nombre de carte par main
+const ITERATION = 1_000_000_000;
+
+// Chrono
 $chronoManager = new Manager;
 $chrono = new Chrono($chronoManager);
 
-// App code
+// Structure de données
 
-Enum Enseignes {
-    case Carreau;
-    case Coeur;
-    case Pique;
-    case Trèfle;
-}
+    Enum Enseignes {
+        case Carreau;
+        case Coeur;
+        case Pique;
+        case Trèfle;
+    }
 
-Enum CardTypes: int {
-    case Atout = 1;
-    case Excuse = 2;
-    case Roi = 3;
-    case Dame = 4;
-    case Cavalier = 5;
-    case Valet = 6;
-    case Mineur = 7;
-}
+    Enum CardTypes: int {
+        case Atout = 1;
+        case Excuse = 2;
+        case Roi = 3;
+        case Dame = 4;
+        case Cavalier = 5;
+        case Valet = 6;
+        case Mineur = 7;
+    }
 
-class Card {
-    public function __construct (public readonly CardTypes $type, public readonly ?Enseignes $enseigne = null, public readonly ?int $displayNumber = null) {}
-}
+    class Card {
+        public function __construct (public readonly CardTypes $type, public readonly ?Enseignes $enseigne = null, public readonly ?int $displayNumber = null) {}
+    }
 
-// Initier avec excuse
-$cards_set = [ new Card (type: CardTypes::Excuse) ];
+// Construction du deck
 
-// Construire les atouts
-for ($i = 21 ; $i > 0 ; $i--) :
-    $cards_set[] = new Card (CardTypes::Atout, displayNumber: $i);
-endfor;
+    # Initier avec excuse
+    $card_deck = [ new Card (type: CardTypes::Excuse) ];
 
-// Construire les enseignes
-foreach (Enseignes::cases() as $Enseigne) :
-    // Cartes mineures
-    for ($i = 10 ; $i > 0 ; $i--) :
-        $cards_set[] = new Card (CardTypes::Mineur, enseigne: $Enseigne, displayNumber: $i);
+    # Construire les atouts
+    for ($i = 21 ; $i > 0 ; $i--) :
+        $card_deck[] = new Card (CardTypes::Atout, displayNumber: $i);
     endfor;
 
-    // Cartes nobles
-    $cards_set[] = new Card (CardTypes::Roi, enseigne: $Enseigne);
-    $cards_set[] = new Card (CardTypes::Dame, enseigne: $Enseigne);
-    $cards_set[] = new Card (CardTypes::Cavalier, enseigne: $Enseigne);
-    $cards_set[] = new Card (CardTypes::Valet, enseigne: $Enseigne);
-endforeach;
+    # Construire les enseignes
+    foreach (Enseignes::cases() as $Enseigne) :
+        # Cartes mineures
+        for ($i = 10 ; $i > 0 ; $i--) :
+            $card_deck[] = new Card (CardTypes::Mineur, enseigne: $Enseigne, displayNumber: $i);
+        endfor;
 
-(\count($cards_set) !== 78) && throw new Error;
-\shuffle($cards_set);
-
-$mainCount = 18;
-
-echo "Number of Combinations: ".Combinations::getNumberOfCombinations(count: 78, length: $mainCount)."\n";
-
-$b = $c = $ps = $mi = 0;
-foreach (Combinations::computeGenerator(values: $cards_set, length: $mainCount) as $oneCombination) :
-    $c++;
-
-    // Compte les atouts
-    $atouts_count = 0;
-    $atouts_majeurs_count = 0;
-    $roi_count = 0;
-    $_petit = false;
-    $_21 = false;
-    $_excuse = false;
-    foreach ($oneCombination as $oneCard) :
-        if ($oneCard->type === CardTypes::Atout) :
-            ++$atouts_count;
-
-            // Check le petit
-            if ($oneCard->displayNumber === 1) :
-                $_petit = true;
-
-            // Check le 21
-            elseif ($oneCard->displayNumber === 21) :
-                $_21 = true;
-                $atouts_majeurs_count++;
-
-            // Check atouts majeurs
-            elseif ($oneCard->displayNumber > 10):
-                $atouts_majeurs_count++;
-            endif;
-
-        elseif ($oneCard->type === CardTypes::Excuse) :
-            $_excuse = true;
-
-        elseif ($oneCard->type === CardTypes::Roi):
-            $roi_count++;
-        endif;
+        # Cartes nobles
+        $card_deck[] = new Card (CardTypes::Roi, enseigne: $Enseigne);
+        $card_deck[] = new Card (CardTypes::Dame, enseigne: $Enseigne);
+        $card_deck[] = new Card (CardTypes::Cavalier, enseigne: $Enseigne);
+        $card_deck[] = new Card (CardTypes::Valet, enseigne: $Enseigne);
     endforeach;
 
-    // Check petit seul et annule la boucle
-    if ($_petit && $atouts_count === 1) :
-        ++$ps;
-        continue;
-    endif;
+    (\count($card_deck) !== 78) && throw new \Error; # Dev test
 
-    // Ckeck Main imparable
-    $isMainImparable = false;
-    if ($atouts_majeurs_count >= 10 && $_21) : # Au moins 10 atouts hors excuse, et le 21
 
-        $cards_remains_count = $mainCount - $atouts_count - $roi_count;
-        $_excuse && $cards_remains_count--;
+// Code Applicatif
 
-        if ($cards_remains_count > 7) : # Seulement 10 atout majeurs et pas d'excuse => on anule tout
-            goto mainImparableRevelation;
-        endif;
+    $oneCombination = getShuffleGameWithTrueCryptographicRandomGeneratorOrThatWeLikeToBelieveTrue($card_deck, MAIN_LENGTH);
 
-        $isMainImparable = true; # Présomption
+    $vm = $c = $ps = $mi = 0;
+    while ($vm < ITERATION) :
+        $c++;
 
-        // Chaque carte doit-être dans une suite
+        # Mélange du jeu et main aléatoire
+        \shuffle($card_deck);
+        $oneCombination = \array_slice($card_deck, 0, MAIN_LENGTH, false);
+
+        # Compte les atouts
+        $atouts_count = 0;
+        $atouts_majeurs_count = 0;
+        $roi_count = 0;
+        $_petit = false;
+        $_21 = false;
+        $_excuse = false;
         foreach ($oneCombination as $oneCard) :
-            if ( $oneCard->type->value > 3  ) : # Cherche les Dame, Cavalier, Valet, Mineurs / Et ignore les rois
+            if ($oneCard->type === CardTypes::Atout) :
+                ++$atouts_count;
 
-                # Si les dames, cavaliers, valets n'ont pas leur carte supérieur dans la même couleur => on annule tout
-                # Si c'est une carte mineur, un valet de la même couleur doit-être présent (qui aura lui-même besoin de son cavalier, lui-même de sa dame, elle-même de son roi)
-                if (haveCard($combination, CardTypes::from($oneCard->type->value -1), $oneCard->enseigne)) :
-                    $isMainImparable = false; # Annulation
-                    goto mainImparableRevelation;
+                // Check le petit
+                if ($oneCard->displayNumber === 1) :
+                    $_petit = true;
+
+                // Check le 21
+                elseif ($oneCard->displayNumber === 21) :
+                    $_21 = true;
+                    $atouts_majeurs_count++;
+
+                // Check atouts majeurs
+                elseif ($oneCard->displayNumber > 10):
+                    $atouts_majeurs_count++;
                 endif;
+
+            elseif ($oneCard->type === CardTypes::Excuse) :
+                $_excuse = true;
+
+            elseif ($oneCard->type === CardTypes::Roi):
+                $roi_count++;
             endif;
         endforeach;
 
-    endif;
+        # Check petit seul et annule la boucle
+        if ($_petit && $atouts_count === 1) :
+            ++$ps;
+            continue;
+        endif;
 
-    //
-    mainImparableRevelation:
-        $isMainImparable && $mi++;
+        // Ckeck Main imparable
+        $isMainImparable = false;
+        if ($atouts_majeurs_count >= 10 && $_21) : # Au moins 10 atouts hors excuse, et le 21
+
+            $cards_remains_count = MAIN_LENGTH - $atouts_count - $roi_count;
+            $_excuse && $cards_remains_count--;
+
+            if ($cards_remains_count > 7) : # Seulement 10 atout majeurs et pas d'excuse => on anule tout
+                goto mainImparableRevelation;
+            endif;
+
+            $isMainImparable = true; # Présomption
+
+            // Chaque carte doit-être dans une suite
+            foreach ($oneCombination as $oneCard) :
+                if ( $oneCard->type->value > 3  ) : # Cherche les Dame, Cavalier, Valet, Mineurs / Et ignore les rois
+
+                    # Si les dames, cavaliers, valets n'ont pas leur carte supérieur dans la même couleur => on annule tout
+                    # Si c'est une carte mineur, un valet de la même couleur doit-être présent (qui aura lui-même besoin de son cavalier, lui-même de sa dame, elle-même de son roi)
+                    if (haveCard($oneCombination, CardTypes::from($oneCard->type->value -1), $oneCard->enseigne)) :
+                        $isMainImparable = false; # Annulation
+                        goto mainImparableRevelation;
+                    endif;
+                endif;
+            endforeach;
+
+        endif;
+
+        // La main est-elle vraiment imparable ?
+        mainImparableRevelation:
+            $isMainImparable && $mi++;
+
+        $vm++;
+    endwhile;
+
+    $nc = Combinations::getNumberOfCombinations(count: 78, length: MAIN_LENGTH);
+    echo "Number of combinaisons théoriques: ".number_format(num: $nc->toInt(), thousands_separator: '_')."\n";
+    echo 'Nombre de combinaisons aléatoires testées : '.number_format(num: $c, thousands_separator: '_')."\n";
+
+    echo "\n";
+
+    echo 'Petits seul: '.$ps."\n";
+    $ps_rate = BigDecimal::of($ps)->dividedBy($vm, 50, RoundingMode::HALF_DOWN);
+    echo 'Taux de petit sec par main distribuée : '. ((string) $ps_rate->multipliedBy(100)->toScale(6, RoundingMode::HALF_DOWN))."%\n";
+    echo 'Soit un taux de '. ((string) $ps_rate->multipliedBy(4)->multipliedBy(100)->toScale(5, RoundingMode::HALF_DOWN))."% par distribution (4 joueurs)\n";
+
+    $ps_t = $ps_rate->multipliedBy($nc);
+    $ps_t = $ps_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
+    echo 'Estimation du nombre de petit sec possibles : '. number_format(num: $ps_t->toInt(), thousands_separator: '_') .' sur un total de '. number_format(num: $nc->toInt(), thousands_separator: '_') ." mains possibles\n";
 
 
-    if (++$b >= 10_000) :
-        break;
-    endif;
-endforeach;
+    echo "\n";
 
-echo 'Itérations: '.$c."\n";
-echo 'Mains valide: '.$b."\n";
-echo 'Petits seul: '.$ps."\n";
-echo 'Main Imparable: '.$mi."\n";
+    echo 'Mains valide (itérations): '.number_format(num: $vm, thousands_separator: '_')."\n";
 
-unset($chrono);
-echo 'Computation timer: '.$chronoManager->getGlobalTimer()." seconds\n";
+    echo "\n";
+
+    echo 'Main Imparable: '.$mi."\n";
+
+    $mi_rate = BigDecimal::of($mi)->dividedBy($vm, 50, RoundingMode::HALF_DOWN);
+    echo 'Taux de Mains Imparables (par mains valides) : '. ((string) $mi_rate->multipliedBy(100)->toScale(7,RoundingMode::HALF_DOWN))."%\n";
+
+    $mi_t = $mi_rate->multipliedBy($nc);
+    $mi_t = $mi_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
+    echo 'Estimation du nombre de mains imparables possibles : '. number_format(num: $mi_t->toInt(), thousands_separator: '_') .' sur un total de '. number_format(num: $nc->minus($ps_t)->toInt(), thousands_separator: '_') ." mains valides possibles\n";
+
+    echo "\n";
+
+    unset($chrono);
+    echo 'Computation timer: '.round($chronoManager->getGlobalTimer(),2)." seconds\n";
+    echo 'Performance: '.\number_format(round($c / $chronoManager->getGlobalTimer(),2), 2, ',', ' ')." combinaisons par secondes.";
 
 // Lib Code
 
-function haveCard (array $combination, CardTypes $cardType, ?Enseignes $enseigne): bool
-{
-    foreach ($combination as $oneCard) :
-        if ($oneCard->type === $cardType && $oneCard->enseigne === $enseigne) :
-            return true;
-        endif;
-    endforeach;
-
-    return false;
-}
-
-#[InternalModulesAPI]
-class Combinations
-{
-
-    #[PublicAPI]
-    static bool $useBigIntegerIfAvailable = true;
-
-    public static function getNumberOfCombinations (int $count, int $length): int
+    function haveCard (array $oneCombination, CardTypes $cardType, ?Enseignes $enseigne): bool
     {
-        if ($count < 1 || $length < 1 || $count < $length) :
-            throw new CondorcetInternalException('Parameters invalid');
-        endif;
-
-        if (self::$useBigIntegerIfAvailable && \class_exists('Brick\Math\BigInteger')) :
-            $a = BigInteger::of(1);
-            for ($i = $count ; $i > ($count - $length) ; $i--) :
-                $a = $a->multipliedBy($i);
-            endfor;
-
-            $b = BigInteger::of(1);
-            for ($i = $length ; $i > 0 ; $i--) :
-                $b = $b->multipliedBy($i);
-            endfor;
-
-            try {
-                return $a->dividedBy($b)->toInt();
-            } catch (IntegerOverflowException $e) {
-                throw new CondorcetIntegerOverflowException($e->getMessage());
-            }
-        else :
-            $a = 1;
-            for ($i = $count ; $i > ($count - $length) ; $i--) :
-                $a = $a * $i;
-            endfor;
-
-            $b = 1;
-            for ($i = $length ; $i > 0 ; $i--) :
-                $b = $b * $i;
-            endfor;
-
-            if (\is_float($a) || \is_float($b)) :
-                throw new CondorcetIntegerOverflowException;
-            else :
-                return (int) ($a / $b);
+        foreach ($oneCombination as $oneCard) :
+            if ($oneCard->type === $cardType && $oneCard->enseigne === $enseigne) :
+                return true;
             endif;
-        endif;
+        endforeach;
+
+        return false;
     }
 
-    public static function compute (array $values, int $length, array $append_before = []): SplFixedArray
+    function getShuffleGameWithTrueCryptographicRandomGeneratorOrThatWeLikeToBelieveTrue (array $arr, int $length): array
     {
-        $count = \count($values);
-        $r = new SplFixedArray(self::getNumberOfCombinations($count, $length));
+        $r = [];
+        $done = [];
 
-        $arrKey = 0;
-        foreach (self::computeGenerator($values, $length, $append_before) as $oneCombination) :
-            $r[$arrKey++] = $oneCombination;
-        endforeach;
+        while (\count($r) < $length) :
+            $t = \random_int(0, 77);
+
+            if (!in_array($t, $done, true)) :
+                $r[] = $arr[$t];
+            endif;
+        endwhile;
 
         return $r;
     }
 
-    public static function computeGenerator (array $values, int $length, array $append_before = []): \Generator
+    class Combinations # From Condorcet PHP, with a few twists
     {
-        $count = \count($values);
-        $size = 2 ** $count;
-        $keys = \array_keys($values);
+        static bool $useBigIntegerIfAvailable = true;
 
-        for ($i = 0; $i < $size; $i++) :
-            $b = \sprintf("%0" . $count . "b", $i);
-            $out = [];
-
-            for ($j = 0; $j < $count; $j++) :
-                if ($b[$j] === '1') :
-                    $out[$keys[$j]] = $values[$keys[$j]];
-                endif;
-            endfor;
-
-            if (count($out) === $length) :
-                 yield \array_values(\array_merge($append_before, $out));
+        public static function getNumberOfCombinations (int $count, int $length): int|BigInteger
+        {
+            if ($count < 1 || $length < 1 || $count < $length) :
+                throw new CondorcetInternalException('Parameters invalid');
             endif;
-        endfor;
-    }
+
+            if (self::$useBigIntegerIfAvailable && \class_exists('Brick\Math\BigInteger')) :
+                $a = BigInteger::of(1);
+                for ($i = $count ; $i > ($count - $length) ; $i--) :
+                    $a = $a->multipliedBy($i);
+                endfor;
+
+                $b = BigInteger::of(1);
+                for ($i = $length ; $i > 0 ; $i--) :
+                    $b = $b->multipliedBy($i);
+                endfor;
+
+                return $a->dividedBy($b);
+
+            else :
+                $a = 1;
+                for ($i = $count ; $i > ($count - $length) ; $i--) :
+                    $a = $a * $i;
+                endfor;
+
+                $b = 1;
+                for ($i = $length ; $i > 0 ; $i--) :
+                    $b = $b * $i;
+                endfor;
+
+                if (\is_float($a) || \is_float($b)) :
+                    throw new CondorcetIntegerOverflowException;
+                else :
+                    return (int) ($a / $b);
+                endif;
+            endif;
+        }
 }
