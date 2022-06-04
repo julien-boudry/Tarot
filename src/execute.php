@@ -7,9 +7,7 @@ declare(strict_types=1);
 
 namespace JulienBoudry\Tarot;
 
-use Brick\Math\BigDecimal;
-use Brick\Math\BigInteger;
-use Brick\Math\RoundingMode;
+use Brick\Math\{BigDecimal,BigInteger,RoundingMode};
 use CondorcetPHP\Condorcet\Throwable\Internal\{IntegerOverflowException as CondorcetIntegerOverflowException, CondorcetInternalException};
 use CondorcetPHP\Condorcet\Timer\{Chrono, Manager};
 
@@ -105,7 +103,7 @@ $chrono = new Chrono($chronoManager);
                     $_21 = true;
                     $atouts_majeurs_count++;
 
-                // Check atouts majeurs
+                // Check atouts majeurs, aouts > 10
                 elseif ($oneCard->displayNumber > 10):
                     $atouts_majeurs_count++;
                 endif;
@@ -194,7 +192,7 @@ $chrono = new Chrono($chronoManager);
 
     unset($chrono);
     echo 'Computation timer: '.round($chronoManager->getGlobalTimer(),2)." seconds\n";
-    echo 'Performance: '.\number_format(round($c / $chronoManager->getGlobalTimer(),2), 2, ',', ' ')." combinaisons par secondes.";
+    echo 'Performance: '.\number_format(round($c / $chronoManager->getGlobalTimer(),2), 0, ',', ' ')." combinaisons par secondes.";
 
 // Lib Code
 
