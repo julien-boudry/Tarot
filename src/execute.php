@@ -83,24 +83,6 @@ $b = $c = $ps = $mi = 0;
 foreach (Combinations::computeGenerator(values: $cards_set, length: $mainCount) as $oneCombination) :
     $c++;
 
-    // // Tri des valeurs, décroissantes
-    // usort($oneCombination, function (Card $a, Card $b): int {
-    //     return $b->displayNumber <=> $a->displayNumber;
-    // });
-
-    // // Tri Atout, puis Excuse, Roi>Dame>Cavalier>Valet>Mineur
-    // usort($oneCombination, function (Card $a, Card $b): int {
-    //     return $a->type->value <=> $b->type->value;
-    // });
-
-    // // Tri des enseignes
-    // usort($oneCombination, function (Card $a, Card $b): int {
-    //     $a_v = $a->enseigne->value ?? 42;
-    //     $b_v = $b->enseigne->value ?? 42;
-
-    //     return $a_v <=> $b_v;
-    // });
-
     // Compte les atouts
     $atouts_count = 0;
     $atouts_majeurs_count = 0;
@@ -142,21 +124,25 @@ foreach (Combinations::computeGenerator(values: $cards_set, length: $mainCount) 
 
     // Ckeck Main imparable
     $isMainImparable = false;
-    if ($atouts_majeurs_count >= 10 && $_21) :
-        $isMainImparable = true;
-
-        if ($atouts_majeurs_count === 10 && !$_excuse) :
-            $isMainImparable = false; // Seulement 10 atout majeurs et pas d'excuse => on anule tout
-            goto mainImparableRevelation;
-        endif;
+    if ($atouts_majeurs_count >= 10 && $_21) : # Au moins 10 atouts hors excuse, et le 21
 
         $cards_remains_count = $mainCount - $atouts_count - $roi_count;
         $_excuse && $cards_remains_count--;
 
+        if ($cards_remains_count > 7) : # Seulement 10 atout majeurs et pas d'excuse => on anule tout
+            goto mainImparableRevelation;
+        endif;
+
+        $isMainImparable = true; # Présomption
+
+        // Chaque carte doit-être dans une suite
         foreach ($oneCombination as $oneCard) :
-            if ( $oneCard->type->value > 3 && $oneCard->type->value < 7 ) : # Dame, Cavalier, Valet
+            if ( $oneCard->type->value > 3  ) : # Cherche les Dame, Cavalier, Valet, Mineurs / Et ignore les rois
+
+                # Si les dames, cavaliers, valets n'ont pas leur carte supérieur dans la même couleur => on annule tout
+                # Si c'est une carte mineur, un valet de la même couleur doit-être présent (qui aura lui-même besoin de son cavalier, lui-même de sa dame, elle-même de son roi)
                 if (haveCard($combination, CardTypes::from($oneCard->type->value -1), $oneCard->enseigne)) :
-                    $isMainImparable = false;
+                    $isMainImparable = false; # Annulation
                     goto mainImparableRevelation;
                 endif;
             endif;
@@ -169,17 +155,18 @@ foreach (Combinations::computeGenerator(values: $cards_set, length: $mainCount) 
         $isMainImparable && $mi++;
 
 
-    if (++$b > 10_000) :
+    if (++$b >= 10_000) :
         break;
     endif;
 endforeach;
 
-var_dump($c);
+echo 'Itérations: '.$c."\n";
+echo 'Mains valide: '.$b."\n";
 echo 'Petits seul: '.$ps."\n";
 echo 'Main Imparable: '.$mi."\n";
 
 unset($chrono);
-echo 'Computation timer: '.$chronoManager->getGlobalTimer()."\n";
+echo 'Computation timer: '.$chronoManager->getGlobalTimer()." seconds\n";
 
 // Lib Code
 
