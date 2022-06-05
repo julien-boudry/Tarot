@@ -15,7 +15,8 @@ require_once 'vendor/autoload.php';
 
 // Config
 const MAIN_LENGTH = 18; # Nombre de carte par main
-const ITERATION = 10_000_000_000;
+// const ITERATION = 1_000_000_000;
+const ITERATION = 250_000_000;
 
 // Chrono
 $chronoManager = new Manager;
@@ -107,8 +108,8 @@ $chrono = new Chrono($chronoManager);
                     $_21 = true;
                     $atouts_majeurs_count++;
 
-                // Check atouts majeurs, aouts > 10
-                elseif ($oneCard->displayNumber > 10):
+                // Check atouts majeurs, aouts >= 8
+                elseif ($oneCard->displayNumber >= 8):
                     $atouts_majeurs_count++;
                 endif;
 
@@ -173,27 +174,29 @@ $chrono = new Chrono($chronoManager);
     echo 'Petits seul: '.$ps."\n";
     $ps_rate = BigDecimal::of($ps)->dividedBy($vm, 50, RoundingMode::HALF_DOWN);
     echo 'Taux de petit sec par main distribuée : '. ((string) $ps_rate->multipliedBy(100)->toScale(6, RoundingMode::HALF_DOWN))."%\n";
-    echo 'Soit un taux de '. ((string) $ps_rate->multipliedBy(4)->multipliedBy(100)->toScale(5, RoundingMode::HALF_DOWN))."% par distribution (4 joueurs)\n";
+    echo 'Soit un taux de '. ((string) $ps_rate->multipliedBy(4)->multipliedBy(100)->toScale(5, RoundingMode::HALF_DOWN))."% par distribution (4 joueurs).\n";
 
     $ps_t = $ps_rate->multipliedBy($nc);
     $ps_t = $ps_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
-    echo 'Estimation du nombre de petit sec possibles : '. formatBigInteger($ps_t) .' sur un total de '. formatBigInteger($nc) ." mains possibles\n";
+    $mv = $nc->minus($ps_t);
+    echo 'Estimation du nombre de petit sec possible : '. formatBigInteger($ps_t) .' sur un total de '. formatBigInteger($nc) ." mains possibles.\n";
+    echo 'Soit '. formatBigInteger($mv) ." mains valides possibles.\n";
 
 
     echo "\n";
 
-    echo 'Mains valide (itérations) : '.formatBigInteger($vm)."\n";
+    echo 'Mains valides (itérations) : '.formatBigInteger($vm)."\n";
 
     echo "\n";
 
-    echo 'Main Imparable : '.$mi."\n";
+    echo 'Mains Imparables : '.$mi."\n";
 
     $mi_rate = BigDecimal::of($mi)->dividedBy($vm, 50, RoundingMode::HALF_DOWN);
     echo 'Taux de Mains Imparables (par mains valides) : '. ((string) $mi_rate->multipliedBy(100)->toScale(7,RoundingMode::HALF_DOWN))."%\n";
 
     $mi_t = $mi_rate->multipliedBy($nc);
     $mi_t = $mi_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
-    echo 'Estimation du nombre de mains imparables possibles : '. formatBigInteger($mi_t) .' sur un total de '. formatBigInteger($nc->minus($ps_t)) ." mains valides possibles\n";
+    echo 'Estimation du nombre de mains imparables possibles : '. formatBigInteger($mi_t) .' sur un total de '. formatBigInteger($mv) ." mains valides possibles.\n";
 
     echo "\n";
 
@@ -217,13 +220,12 @@ $chrono = new Chrono($chronoManager);
     function getShuffleGameWithTrueCryptographicRandomGeneratorOrThatWeLikeToBelieveTrue (array $arr, int $length): array
     {
         $r = [];
-        $done = [];
 
         while (\count($r) < $length) :
             $t = \random_int(0, 77);
 
-            if (!in_array($t, $done, true)) :
-                $r[] = $arr[$t];
+            if (!array_key_exists($t,$r)) :
+                $r[$t] = $arr[$t];
             endif;
         endwhile;
 

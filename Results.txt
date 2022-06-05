@@ -1,0 +1,17 @@
+Nombre de combinaisons théoriques : 212_566_476_905_162_380
+Nombre de combinaisons aléatoires testées : 250_164_341
+
+Petits seul: 164341
+Taux de petit sec par main distribuée : 0.065736%
+Soit un taux de 0.26295% par distribution (4 joueurs).
+Estimation du nombre de petit sec possible : 139_733_549_524_285 sur un total de 212_566_476_905_162_380 mains possibles.
+Soit 212_426_743_355_638_095 mains valides possibles.
+
+Mains valides (itérations) : 250_000_000
+
+Mains Imparables : 1987
+Taux de Mains Imparables (par mains valides) : 0.0007948%
+Estimation du nombre de mains imparables possibles : 1_689_478_358_442 sur un total de 212_426_743_355_638_095 mains valides possibles.
+
+Computation timer: 397.55 seconds
+Performance: 629 261 combinaisons par secondes.
