@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace JulienBoudry\Tarot;
 
-use Brick\Math\{BigDecimal,BigInteger,RoundingMode};
+use Brick\Math\{BigDecimal, BigInteger, RoundingMode};
 use CondorcetPHP\Condorcet\Throwable\Internal\{IntegerOverflowException as CondorcetIntegerOverflowException, CondorcetInternalException};
 use CondorcetPHP\Condorcet\Timer\{Chrono, Manager};
 
@@ -15,7 +15,7 @@ require_once 'vendor/autoload.php';
 
 // Config
 const MAIN_LENGTH = 18; # Nombre de carte par main
-const ITERATION = 1_000_000_000;
+const ITERATION = 10_000_000_000;
 
 // Chrono
 $chronoManager = new Manager;
@@ -157,9 +157,12 @@ $chrono = new Chrono($chronoManager);
         $vm++;
     endwhile;
 
+    $c = BigInteger::of($c);
+    $vm = BigInteger::of($vm);
+
     $nc = Combinations::getNumberOfCombinations(count: 78, length: MAIN_LENGTH);
-    echo "Number of combinaisons théoriques: ".number_format(num: $nc->toInt(), thousands_separator: '_')."\n";
-    echo 'Nombre de combinaisons aléatoires testées : '.number_format(num: $c, thousands_separator: '_')."\n";
+    echo "Nombre de combinaisons théoriques : ".formatBigInteger($nc)."\n";
+    echo 'Nombre de combinaisons aléatoires testées : '.formatBigInteger($c)."\n";
 
     echo "\n";
 
@@ -170,29 +173,29 @@ $chrono = new Chrono($chronoManager);
 
     $ps_t = $ps_rate->multipliedBy($nc);
     $ps_t = $ps_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
-    echo 'Estimation du nombre de petit sec possibles : '. number_format(num: $ps_t->toInt(), thousands_separator: '_') .' sur un total de '. number_format(num: $nc->toInt(), thousands_separator: '_') ." mains possibles\n";
+    echo 'Estimation du nombre de petit sec possibles : '. formatBigInteger($ps_t) .' sur un total de '. formatBigInteger($nc) ." mains possibles\n";
 
 
     echo "\n";
 
-    echo 'Mains valide (itérations): '.number_format(num: $vm, thousands_separator: '_')."\n";
+    echo 'Mains valide (itérations) : '.formatBigInteger($vm)."\n";
 
     echo "\n";
 
-    echo 'Main Imparable: '.$mi."\n";
+    echo 'Main Imparable : '.$mi."\n";
 
     $mi_rate = BigDecimal::of($mi)->dividedBy($vm, 50, RoundingMode::HALF_DOWN);
     echo 'Taux de Mains Imparables (par mains valides) : '. ((string) $mi_rate->multipliedBy(100)->toScale(7,RoundingMode::HALF_DOWN))."%\n";
 
     $mi_t = $mi_rate->multipliedBy($nc);
     $mi_t = $mi_t->toScale(0, RoundingMode::HALF_DOWN)->toBigInteger();
-    echo 'Estimation du nombre de mains imparables possibles : '. number_format(num: $mi_t->toInt(), thousands_separator: '_') .' sur un total de '. number_format(num: $nc->minus($ps_t)->toInt(), thousands_separator: '_') ." mains valides possibles\n";
+    echo 'Estimation du nombre de mains imparables possibles : '. formatBigInteger($mi_t) .' sur un total de '. formatBigInteger($nc->minus($ps_t)) ." mains valides possibles\n";
 
     echo "\n";
 
     unset($chrono);
     echo 'Computation timer: '.round($chronoManager->getGlobalTimer(),2)." seconds\n";
-    echo 'Performance: '.\number_format(round($c / $chronoManager->getGlobalTimer(),2), 0, ',', ' ')." combinaisons par secondes.";
+    echo 'Performance: '.\number_format(round($c->toInt() / $chronoManager->getGlobalTimer(),2), 0, ',', ' ')." combinaisons par secondes.";
 
 // Lib Code
 
@@ -223,11 +226,33 @@ $chrono = new Chrono($chronoManager);
         return $r;
     }
 
+    function formatBigInteger (BigInteger $number): string
+    {
+        $asString = (string) $number;
+        $arr = \mb_str_split($asString, 1);
+        $arr = \array_reverse($arr);
+
+        $asString = reset($arr);
+
+        $d = 0;
+        while ($d !== \count($arr)) :
+            $n = next($arr);
+
+            if (++$d % 3 === 0 && $n !== false) :
+                $asString = '_'.$asString;
+            endif;
+
+            $asString = $n.$asString;
+        endwhile;
+
+        return $asString;
+    }
+
     class Combinations # From Condorcet PHP, with a few twists
     {
         static bool $useBigIntegerIfAvailable = true;
 
-        public static function getNumberOfCombinations (int $count, int $length): int|BigInteger
+        public static function getNumberOfCombinations (int $count, int $length): BigInteger
         {
             if ($count < 1 || $length < 1 || $count < $length) :
                 throw new CondorcetInternalException('Parameters invalid');
