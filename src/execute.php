@@ -41,7 +41,11 @@ $chrono = new Chrono($chronoManager);
     }
 
     class Card {
-        public function __construct (public readonly CardTypes $type, public readonly ?Enseignes $enseigne = null, public readonly ?int $displayNumber = null) {}
+        public function __construct (
+            public readonly CardTypes $type,
+            public readonly ?Enseignes $enseigne = null,
+            public readonly ?int $displayNumber = null
+        ) {}
     }
 
 // Construction du deck
